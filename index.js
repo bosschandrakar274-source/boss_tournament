@@ -1,40 +1,91 @@
 const express = require("express");
+const { MongoClient } = require("mongodb");
 
 const app = express();
 app.use(express.json());
 
-app.post("/withdraw", (req, res) => {
-  const { userId, amount, upiId } = req.body;
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = process.env.DB_NAME || "boss_tournament";
 
-  if (!userId || !amount || !upiId) {
-    return res.status(400).json({
-      success: false,
-      message: "userId, amount और upiId जरूरी हैं"
-    });
+let db;
+
+async function connectDB() {
+  if (!MONGODB_URI) {
+    throw new Error("MONGODB_URI is not set");
   }
 
-  if (Number(amount) <= 0) {
-    return res.status(400).json({
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  db = client.db(DB_NAME);
+
+  console.log("MongoDB connected");
+}
+
+app.post("/withdraw", async (req, res) => {
+  try {
+    const { userId, amount, upiId } = req.body;
+
+    if (!userId || !amount || !upiId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId, amount और upiId जरूरी हैं"
+      });
+    }
+
+    const withdrawAmount = Number(amount);
+
+    if (!Number.isFinite(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "सही amount डालें"
+      });
+    }
+
+    const request = {
+      userId: String(userId),
+      amount: withdrawAmount,
+      upiId: String(upiId).trim(),
+      status: "pending",
+      createdAt: new Date()
+    };
+
+    const result = await db
+      .collection("withdrawals")
+      .insertOne(request);
+
+    return res.json({
+      success: true,
+      status: "pending",
+      message: "Withdrawal request received",
+      withdrawalId: result.insertedId.toString()
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
       success: false,
-      message: "सही amount डालें"
+      message: "Withdrawal request save नहीं हो पाई"
     });
   }
+});
 
-  // अभी withdrawal request बनाई जा रही है।
-  // असली UPI payout के लिए बाद में verified payment/payout provider जोड़ना होगा।
-
-  return res.json({
+app.get("/", (req, res) => {
+  res.json({
     success: true,
-    status: "pending",
-    message: "Withdrawal request received",
-    userId,
-    amount: Number(amount),
-    upiId
+    message: "Boss Tournament API is running"
   });
 });
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("MongoDB connection failed:", error);
+    process.exit(1);
+  });
