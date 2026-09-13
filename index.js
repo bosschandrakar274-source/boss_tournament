@@ -142,3 +142,12 @@ connectDB()
     console.error("Database connection failed:", error);
     process.exit(1);
   });
+catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Deposit request save नहीं हो पाई"
+    });
+  }
+      }
