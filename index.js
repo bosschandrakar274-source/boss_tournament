@@ -128,7 +128,82 @@ app.post("/withdraw", async (req, res) => {
     });
   }
 });
+/* ADMIN WITHDRAWAL PANEL */
 
+app.get("/admin/withdrawals", async (req, res) => {
+  try {
+    const key = req.query.key;
+
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
+      return res.status(401).send("Unauthorized");
+    }
+
+    const withdrawals = await db
+      .collection("withdrawals")
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Admin Withdrawals</title>
+        <style>
+          body {
+            font-family: Arial;
+            background: #111827;
+            color: white;
+            padding: 20px;
+          }
+          .card {
+            background: #1f2937;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+          }
+          h1 { color: #ffd21c; }
+          .pending { color: #ffd21c; }
+          .paid { color: #4ade80; }
+        </style>
+      </head>
+      <body>
+        <h1>💸 Withdrawal Requests</h1>
+    `;
+
+    if (withdrawals.length === 0) {
+      html += "<p>No withdrawal requests found.</p>";
+    }
+
+    withdrawals.forEach(w => {
+      html += `
+        <div class="card">
+          <p><b>User ID:</b> ${w.userId || ""}</p>
+          <p><b>Amount:</b> ₹${w.amount || 0}</p>
+          <p><b>UPI ID:</b> ${w.upiId || ""}</p>
+          <p><b>Status:</b>
+            <span class="${w.status === "paid" ? "paid" : "pending"}">
+              ${w.status || "pending"}
+            </span>
+          </p>
+          <p><b>Date:</b> ${w.createdAt || ""}</p>
+        </div>
+      `;
+    });
+
+    html += `
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Unable to load withdrawals");
+  }
+});
 /* START SERVER */
 const PORT = process.env.PORT || 3000;
 
