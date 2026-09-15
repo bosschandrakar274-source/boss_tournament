@@ -77,3 +77,8 @@ app.get("/", (req, res) => {
     message: "Boss Tournament API is running"
   });
 });
+connectDB().then(() => {
+  app.listen(process.env.PORT || 3000, () => {
+    console.log("Server started");
+  });
+});
