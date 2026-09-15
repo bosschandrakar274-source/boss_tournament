@@ -1,27 +1,104 @@
 const express = require("express");
 const { MongoClient } = require("mongodb");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 app.use(express.json());
 
+// MongoDB
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.DB_NAME || "boss_tournament";
 
 let db;
 
+// Supabase
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Supabase environment variables are missing");
+}
+
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY
+);
+
+// MongoDB connection
 async function connectDB() {
   if (!MONGODB_URI) {
-    throw new Error("MONGODB_URI is not set");
+    console.log("MONGODB_URI not set - MongoDB skipped");
+    return;
   }
 
-  const cleanURI = MONGODB_URI.replace(/[?&]appName=[^&]*/gi, '');
-const client = new MongoClient(cleanURI);
+  const cleanURI = MONGODB_URI.replace(/[?&]appName=[^&]*/gi, "");
+  const client = new MongoClient(cleanURI);
 
+  await client.connect();
   db = client.db(DB_NAME);
 
   console.log("MongoDB connected");
 }
 
+// Deposit
+app.post("/deposit", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+
+    if (!userId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "userId और amount जरूरी हैं"
+      });
+    }
+
+    const depositAmount = Number(amount);
+
+    if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "सही amount डालें"
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("wallet_transactions")
+      .insert({
+        user_id: String(userId),
+        type: "deposit",
+        amount: depositAmount,
+        status: "pending"
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Deposit error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Deposit save नहीं हो पाया"
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: "pending",
+      message: "Deposit request received",
+      transaction: data
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Deposit में error आया"
+    });
+  }
+});
+
+// Withdraw
 app.post("/withdraw", async (req, res) => {
   try {
     const { userId, amount, upiId } = req.body;
@@ -42,23 +119,31 @@ app.post("/withdraw", async (req, res) => {
       });
     }
 
-    const request = {
-      userId: String(userId),
-      amount: withdrawAmount,
-      upiId: String(upiId).trim(),
-      status: "pending",
-      createdAt: new Date()
-    };
+    const { data, error } = await supabase
+      .from("wallet_transactions")
+      .insert({
+        user_id: String(userId),
+        type: "withdraw",
+        amount: withdrawAmount,
+        status: "pending"
+      })
+      .select()
+      .single();
 
-    const result = await db
-      .collection("withdrawals")
-      .insertOne(request);
+    if (error) {
+      console.error("Withdraw error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Withdraw save नहीं हो पाया"
+      });
+    }
 
     return res.json({
       success: true,
       status: "pending",
       message: "Withdrawal request received",
-      withdrawalId: result.insertedId.toString()
+      withdrawalId: data.id
     });
 
   } catch (error) {
@@ -66,17 +151,20 @@ app.post("/withdraw", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Withdrawal request save नहीं हो पाई"
+      message: "Withdrawal में error आया"
     });
   }
 });
 
+// Test
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "Boss Tournament API is running"
   });
 });
+
+// Start server
 connectDB().then(() => {
   app.listen(process.env.PORT || 3000, () => {
     console.log("Server started");
