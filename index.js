@@ -14,8 +14,8 @@ async function connectDB() {
     throw new Error("MONGODB_URI is not set");
   }
 
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
+  const cleanURI = MONGODB_URI.replace(/[?&]appName=[^&]*/gi, '');
+const client = new MongoClient(cleanURI);
 
   db = client.db(DB_NAME);
 
