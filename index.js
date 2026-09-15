@@ -1,22 +1,20 @@
 const express = require("express");
-const { MongoClient } = require("mongodb");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 app.use(express.json());
 
-// MongoDB
-const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = process.env.DB_NAME || "boss_tournament";
-
-let db;
-
+// =========================
 // Supabase
+// =========================
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("Supabase environment variables are missing");
+  console.error("Supabase environment variables are missing!");
+  process.exit(1);
 }
 
 const supabase = createClient(
@@ -24,23 +22,10 @@ const supabase = createClient(
   SUPABASE_SERVICE_ROLE_KEY
 );
 
-// MongoDB connection
-async function connectDB() {
-  if (!MONGODB_URI) {
-    console.log("MONGODB_URI not set - MongoDB skipped");
-    return;
-  }
-
-  const cleanURI = MONGODB_URI.replace(/[?&]appName=[^&]*/gi, "");
-  const client = new MongoClient(cleanURI);
-
-  await client.connect();
-  db = client.db(DB_NAME);
-
-  console.log("MongoDB connected");
-}
-
+// =========================
 // Deposit
+// =========================
+
 app.post("/deposit", async (req, res) => {
   try {
     const { userId, amount } = req.body;
@@ -48,7 +33,7 @@ app.post("/deposit", async (req, res) => {
     if (!userId || !amount) {
       return res.status(400).json({
         success: false,
-        message: "userId और amount जरूरी हैं"
+        message: "userId और amount जरूरी है"
       });
     }
 
@@ -77,7 +62,8 @@ app.post("/deposit", async (req, res) => {
 
       return res.status(500).json({
         success: false,
-        message: "Deposit save नहीं हो पाया"
+        message: "Deposit save नहीं हो पाया",
+        error: error.message
       });
     }
 
@@ -98,7 +84,10 @@ app.post("/deposit", async (req, res) => {
   }
 });
 
+// =========================
 // Withdraw
+// =========================
+
 app.post("/withdraw", async (req, res) => {
   try {
     const { userId, amount, upiId } = req.body;
@@ -135,15 +124,16 @@ app.post("/withdraw", async (req, res) => {
 
       return res.status(500).json({
         success: false,
-        message: "Withdraw save नहीं हो पाया"
+        message: "Withdraw save नहीं हो पाया",
+        error: error.message
       });
     }
 
     return res.json({
       success: true,
       status: "pending",
-      message: "Withdrawal request received",
-      withdrawalId: data.id
+      message: "Withdraw request received",
+      withdrawId: data.id
     });
 
   } catch (error) {
@@ -151,12 +141,15 @@ app.post("/withdraw", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Withdrawal में error आया"
+      message: "Withdraw में error आया"
     });
   }
 });
 
+// =========================
 // Test
+// =========================
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -164,9 +157,12 @@ app.get("/", (req, res) => {
   });
 });
 
-// Start server
-connectDB().then(() => {
-  app.listen(process.env.PORT || 3000, () => {
-    console.log("Server started");
-  });
+// =========================
+// Start Server
+// =========================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server started on port " + PORT);
 });
